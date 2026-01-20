@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Morgonval Builder – ljud, bild och export (STABIL)</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;background:#f3f5f7;margin:20px}
+h1{font-size:26px}
+.section{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.card{border:2px solid #ccc;border-radius:14px;padding:10px;text-align:center;background:#fafafa}
+.card.selected{border-color:#4caf50;background:#e9f7ef}
+img{width:100%;height:120px;object-fit:cover;border-radius:10px;margin-top:6px;display:none}
+input{width:100%;padding:6px;margin-top:4px}
+button{margin-top:6px;padding:8px 12px;font-size:14px;border:none;border-radius:8px;background:#0b6fb1;color:#fff;cursor:pointer}
+button.secondary{background:#4caf50}
+button.play{background:#333}
+button.download{background:#673ab7}
+.status{font-size:13px;margin-top:4px}
+.output{background:#eef2f6;border-radius:12px;padding:16px;margin-top:16px}
+</style>
+</head>
+<body>
+
+<h1>Morgonval – Builder (ljud + bild)</h1>
+
+<div class="section">
+ <label>Titel</label>
+ <input id="title" value="Vad vill jag ha?">
+
+ <div class="grid" id="builder"></div>
+
+ <button onclick="generateMorgonval()">Generera Morgonval</button>
+ <button class="download" onclick="downloadMorgonval()">⬇️ Ladda ner färdig Morgonval</button>
+</div>
+
+<div class="section output" id="result" style="display:none"></div>
+
+<script>
+// ===== DATA =====
+let images={};
+let recordings={};
+let stream=null;
+let recorder=null;
+let chunks=[];
+
+// ===== MICROPHONE =====
+async function initMic(){ if(stream) return; stream=await navigator.mediaDevices.getUserMedia({audio:true}); }
+
+// ===== BUILD 8 CHOICES =====
+function build(){
+ const b=document.getElementById('builder');
+ for(let i=1;i<=8;i++){
+  b.innerHTML+=`
+  <div class="card">
+   <strong>Val ${i}</strong>
+   <input id="text${i}" placeholder="Text (t.ex. Saft)">
+   <input type="file" accept="image/*" onchange="loadImg(event,${i})">
+   <img id="img${i}">
+   <button onclick="startRec(${i})">🎙 Spela in</button>
+   <button class="secondary" onclick="stopRec()">⏹ Stop</button>
+   <button class="play" onclick="playRec(${i})">▶ Lyssna</button>
+   <div class="status" id="status${i}">Ingen inspelning</div>
+  </div>`;
+ }
+}
+
+// ===== IMAGE =====
+function loadImg(e,i){ const f=e.target.files[0]; if(!f) return;
+ const r=new FileReader();
+ r.onload=()=>{ images[i]=r.result; const im=document.getElementById('img'+i); im.src=r.result; im.style.display='block'; };
+ r.readAsDataURL(f);
+}
+
+// ===== AUDIO =====
+async function startRec(i){ await initMic(); chunks=[];
+ recorder=new MediaRecorder(stream);
+ recorder.ondataavailable=e=>chunks.push(e.data);
+ recorder.onstop=()=>saveRec(i);
+ recorder.start(); document.getElementById('status'+i).innerText='Spelar in...'; }
+
+function stopRec(){ if(recorder && recorder.state==='recording') recorder.stop(); }
+
+function saveRec(i){ const blob=new Blob(chunks,{type:'audio/webm'}); const r=new FileReader();
+ r.onload=()=>{ recordings[i]=r.result; document.getElementById('status'+i).innerText='Klar'; };
+ r.readAsDataURL(blob); }
+
+function playRec(i){ if(recordings[i]) new Audio(recordings[i]).play(); }
+
+// ===== GENERATE PREVIEW =====
+function generateMorgonval(){
+ const title=document.getElementById('title').value;
+ let html=`<h2>${title}</h2><div class='grid'>`;
+ for(let i=1;i<=8;i++){
+  const t=document.getElementById('text'+i).value||'';
+  if(!t) continue;
+  const img=images[i]?`<img src="${images[i]}">`:'';
+  const snd=recordings[i]?`<button onclick=\"new Audio('${recordings[i]}').play()\">🔊</button>`:'';
+  html+=`<div class='card' onclick="this.classList.toggle('selected')"><strong>${t}</strong><br>${img}<br>${snd}</div>`;
+ }
+ html+='</div>';
+ const res=document.getElementById('result'); res.innerHTML=html; res.style.display='block';
+}
+
+// ===== DOWNLOAD FINAL HTML =====
+function downloadMorgonval(){
+ const content=document.getElementById('result').innerHTML;
+ if(!content){ alert('Generera Morgonval först'); return; }
+ const title=document.getElementById('title').value||'Morgonval';
+ const html=`<!DOCTYPE html><html lang='sv'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1.0'><title>${title}</title><style>body{font-family:Arial;padding:20px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.card{border:3px solid #ccc;border-radius:16px;padding:12px;text-align:center}.card.selected{border-color:#4caf50;background:#e9f7ef}img{width:100%;height:140px;object-fit:cover;border-radius:12px;margin-top:8px}button{padding:14px 18px;font-size:20px;border:none;border-radius:14px;background:#0b6fb1;color:#fff}</style></head><body>${content}</body></html>`;
+ const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='index.html'; a.click();
+}
+
+build();
+</script>
+</body>
+</html>
